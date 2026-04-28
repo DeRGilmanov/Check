@@ -1,31 +1,8 @@
-// ===== Хранилище данных =====
-const STORAGE_KEY = "mutual_conditions_data";
-
-// Загрузка данных из localStorage
-function loadData() {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (data) {
-    return JSON.parse(data);
-  }
-  return [];
-}
-
-// Сохранение данных в localStorage
-function saveData(conditions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(conditions));
-}
-
-// Текущие данные
-let conditions = loadData();
-
-// Текущий фильтр
+let conditions = [];
 let currentFilter = "all";
 let currentPeriod = "all";
-
-// ID условия для отклонения
 let pendingRejectId = null;
 
-// ===== Вспомогательные функции =====
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
@@ -50,10 +27,8 @@ function getStatusText(status) {
   return statusMap[status] || status;
 }
 
-// Фильтрация по периоду
 function filterByPeriod(conditions, period) {
   const now = Date.now();
-
   switch (period) {
     case "day":
       return conditions.filter((c) => c.createdAt > now - 24 * 60 * 60 * 1000);
@@ -70,13 +45,11 @@ function filterByPeriod(conditions, period) {
   }
 }
 
-// Фильтрация по статусу
 function filterByStatus(conditions, status) {
   if (status === "all") return conditions;
   return conditions.filter((c) => c.status === status);
 }
 
-// Получить отфильтрованные условия для конкретного человека
 function getFilteredConditions(target) {
   let filtered = conditions.filter((c) => c.target === target);
   filtered = filterByPeriod(filtered, currentPeriod);
@@ -84,20 +57,41 @@ function getFilteredConditions(target) {
   return filtered;
 }
 
-// Подсчёт процента выполнения
 function calculateProgress(target) {
   const allConditions = conditions.filter((c) => c.target === target);
   const periodFiltered = filterByPeriod(allConditions, currentPeriod);
-
   if (periodFiltered.length === 0) return 0;
-
   const confirmed = periodFiltered.filter(
     (c) => c.status === "confirmed",
   ).length;
   return Math.round((confirmed / periodFiltered.length) * 100);
 }
 
-// ===== Система комментариев =====
+function loadData() {
+  const conditionsRef = database.ref("conditions");
+  conditionsRef.on("value", (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      conditions = Object.values(data);
+    } else {
+      conditions = [];
+    }
+    renderAll();
+  });
+}
+
+function saveCondition(condition) {
+  database.ref("conditions/" + condition.id).set(condition);
+}
+
+function updateCondition(id, updates) {
+  database.ref("conditions/" + id).update(updates);
+}
+
+function deleteConditionFromDB(id) {
+  database.ref("conditions/" + id).remove();
+}
+
 function addComment(conditionId, author, text) {
   const condition = conditions.find((c) => c.id === conditionId);
   if (condition) {
@@ -110,12 +104,10 @@ function addComment(conditionId, author, text) {
       text: text,
       timestamp: Date.now(),
     });
-    saveData(conditions);
-    renderAll();
+    saveCondition(condition);
   }
 }
 
-// ===== Рендеринг =====
 function renderConditions(target) {
   const container = document.getElementById(`list${target}`);
   const filtered = getFilteredConditions(target);
@@ -134,30 +126,21 @@ function renderConditions(target) {
     .map((condition) => {
       const canMarkDone = condition.status === "not_done";
       const canReview = condition.status === "pending";
-
-      // Определяем, кто выполняет (target) и кто создал
       const creatorName = condition.createdBy;
-      const executorName = condition.target === "A" ? "Человек Д" : "Человек Р";
+      const executorName = condition.target === "A" ? "Человек A" : "Человек B";
 
       let actionsHTML = "";
-
-      // Кнопка "Выполнено" показывается, если статус "Не выполнено"
       if (canMarkDone) {
         actionsHTML += `<button class="btn-sm btn-done" onclick="markAsDone('${condition.id}')">✔ Отметить выполненным</button>`;
       }
-
-      // Кнопки подтверждения/отклонения показываются, если статус "Ожидает проверки"
       if (canReview) {
         actionsHTML += `
                 <button class="btn-sm btn-confirm" onclick="confirmCondition('${condition.id}')">✓ Подтвердить</button>
                 <button class="btn-sm btn-reject" onclick="openRejectModal('${condition.id}')">✗ Отклонить</button>
             `;
       }
-
-      // Кнопка удаления
       actionsHTML += `<button class="btn-sm btn-delete" onclick="deleteCondition('${condition.id}')">🗑 Удалить</button>`;
 
-      // Отображение комментариев
       let commentsHTML = "";
       if (condition.comments && condition.comments.length > 0) {
         commentsHTML = `
@@ -180,21 +163,10 @@ function renderConditions(target) {
             `;
       }
 
-      // Форма для добавления комментария
       const commentFormHTML = `
             <div class="comment-form">
-                <input 
-                    type="text" 
-                    class="comment-input" 
-                    id="commentInput_${condition.id}" 
-                    placeholder="Добавить комментарий..."
-                >
-                <button 
-                    class="btn-sm btn-comment" 
-                    onclick="submitComment('${condition.id}', '${target}')"
-                >
-                    💬 Отправить
-                </button>
+                <input type="text" class="comment-input" id="commentInput_${condition.id}" placeholder="Добавить комментарий...">
+                <button class="btn-sm btn-comment" onclick="submitComment('${condition.id}', '${target}')">💬 Отправить</button>
             </div>
         `;
 
@@ -211,7 +183,6 @@ function renderConditions(target) {
                 <div class="condition-meta">
                     <span>📅 Создано: ${formatDate(condition.createdAt)}</span>
                 </div>
-                
                 ${
                   condition.comment
                     ? `
@@ -221,10 +192,8 @@ function renderConditions(target) {
                 `
                     : ""
                 }
-                
                 ${commentsHTML}
                 ${commentFormHTML}
-                
                 <div class="condition-actions">
                     ${actionsHTML}
                 </div>
@@ -237,14 +206,8 @@ function renderConditions(target) {
 function submitComment(conditionId, target) {
   const input = document.getElementById(`commentInput_${conditionId}`);
   const text = input.value.trim();
-
   if (!text) return;
-
-  // Определяем, кто оставляет комментарий
-  // Если target это A, значит условие для A, и создал его B
-  // Комментарий может оставить любой
-  const author = target === "A" ? "Человек Д" : "Человек Р";
-
+  const author = target === "A" ? "Человек A" : "Человек B";
   addComment(conditionId, author, text);
   input.value = "";
 }
@@ -253,19 +216,14 @@ function renderStats() {
   const progressA = calculateProgress("A");
   const progressB = calculateProgress("B");
 
-  // Обновление круговых диаграмм
   document.getElementById("circleFillA").style.strokeDasharray =
     `${progressA}, 100`;
   document.getElementById("percentA").textContent = `${progressA}%`;
-
   document.getElementById("circleFillB").style.strokeDasharray =
     `${progressB}, 100`;
   document.getElementById("percentB").textContent = `${progressB}%`;
-
-  // Обновление столбчатой диаграммы
   document.getElementById("barFillA").style.height = `${progressA}%`;
   document.getElementById("barValueA").textContent = `${progressA}%`;
-
   document.getElementById("barFillB").style.height = `${progressB}%`;
   document.getElementById("barValueB").textContent = `${progressB}%`;
 }
@@ -276,11 +234,9 @@ function renderAll() {
   renderStats();
 }
 
-// ===== Действия с условиями =====
 function addCondition(target) {
   const input = document.getElementById(`input${target}`);
   const description = input.value.trim();
-
   if (!description) {
     alert("Введите описание условия");
     return;
@@ -292,34 +248,21 @@ function addCondition(target) {
     description: description,
     status: "not_done",
     comment: "",
-    comments: [], // Массив для переписки
+    comments: [],
     createdBy: target === "A" ? "Человек B" : "Человек A",
     createdAt: Date.now(),
   };
 
-  conditions.push(newCondition);
-  saveData(conditions);
+  saveCondition(newCondition);
   input.value = "";
-  renderAll();
 }
 
 function markAsDone(id) {
-  const condition = conditions.find((c) => c.id === id);
-  if (condition) {
-    condition.status = "pending";
-    saveData(conditions);
-    renderAll();
-  }
+  updateCondition(id, { status: "pending" });
 }
 
 function confirmCondition(id) {
-  const condition = conditions.find((c) => c.id === id);
-  if (condition) {
-    condition.status = "confirmed";
-    condition.comment = "";
-    saveData(conditions);
-    renderAll();
-  }
+  updateCondition(id, { status: "confirmed", comment: "" });
 }
 
 function openRejectModal(id) {
@@ -331,20 +274,15 @@ function openRejectModal(id) {
 
 function rejectCondition() {
   const comment = document.getElementById("rejectComment").value.trim();
-
   if (!comment) {
     alert("Необходимо указать причину отклонения");
     return;
   }
-
-  const condition = conditions.find((c) => c.id === pendingRejectId);
-  if (condition) {
-    condition.status = "rejected";
-    condition.comment = comment;
-    saveData(conditions);
-    closeRejectModal();
-    renderAll();
-  }
+  updateCondition(pendingRejectId, {
+    status: "rejected",
+    comment: comment,
+  });
+  closeRejectModal();
 }
 
 function closeRejectModal() {
@@ -354,42 +292,31 @@ function closeRejectModal() {
 
 function deleteCondition(id) {
   if (confirm("Вы уверены, что хотите удалить это условие?")) {
-    conditions = conditions.filter((c) => c.id !== id);
-    saveData(conditions);
-    renderAll();
+    deleteConditionFromDB(id);
   }
 }
 
-// ===== Обработчики фильтров =====
 function setFilter(filter) {
   currentFilter = filter;
-
   document.querySelectorAll(".filter-btn").forEach((btn) => {
     btn.classList.remove("active");
-    if (btn.dataset.filter === filter) {
-      btn.classList.add("active");
-    }
+    if (btn.dataset.filter === filter) btn.classList.add("active");
   });
-
   renderAll();
 }
 
 function setPeriod(period) {
   currentPeriod = period;
-
   document.querySelectorAll(".period-btn").forEach((btn) => {
     btn.classList.remove("active");
-    if (btn.dataset.period === period) {
-      btn.classList.add("active");
-    }
+    if (btn.dataset.period === period) btn.classList.add("active");
   });
-
   renderAll();
 }
 
-// ===== Инициализация =====
 function init() {
-  // Обработчики добавления условий
+  loadData();
+
   document
     .getElementById("btnAddA")
     .addEventListener("click", () => addCondition("A"));
@@ -397,7 +324,6 @@ function init() {
     .getElementById("btnAddB")
     .addEventListener("click", () => addCondition("B"));
 
-  // Обработчики Enter в полях ввода
   document.getElementById("inputA").addEventListener("keypress", (e) => {
     if (e.key === "Enter") addCondition("A");
   });
@@ -405,7 +331,6 @@ function init() {
     if (e.key === "Enter") addCondition("B");
   });
 
-  // Обработчики фильтров
   document.querySelectorAll(".filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => setFilter(btn.dataset.filter));
   });
@@ -414,7 +339,6 @@ function init() {
     btn.addEventListener("click", () => setPeriod(btn.dataset.period));
   });
 
-  // Обработчики модального окна
   document
     .getElementById("btnConfirmReject")
     .addEventListener("click", rejectCondition);
@@ -422,16 +346,9 @@ function init() {
     .getElementById("btnCancelReject")
     .addEventListener("click", closeRejectModal);
 
-  // Закрытие модального окна по клику на фон
   document.getElementById("rejectModal").addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) {
-      closeRejectModal();
-    }
+    if (e.target === e.currentTarget) closeRejectModal();
   });
-
-  // Первый рендер
-  renderAll();
 }
 
-// Запуск приложения
 init();
