@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Трекер взаимных условий</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Заголовок -->
+      <header class="header">
+        <h1>🤝 Трекер взаимных условий</h1>
+        <div class="subtitle">Человек Д ↔ Человек Р</div>
+      </header>
+
+      <!-- Статистика -->
+      <section class="stats-section">
+        <div class="stat-card">
+          <h3>Человек Д</h3>
+          <div class="progress-circle" id="progressA">
+            <svg viewBox="0 0 36 36">
+              <path
+                class="circle-bg"
+                d="M18 2.0845
+                            a 15.9155 15.9155 0 0 1 0 31.831
+                            a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                class="circle-fill"
+                id="circleFillA"
+                stroke-dasharray="0, 100"
+                d="M18 2.0845
+                            a 15.9155 15.9155 0 0 1 0 31.831
+                            a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span class="percentage" id="percentA">0%</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <h3>Сравнение</h3>
+          <div class="bar-chart">
+            <div class="bar-item">
+              <div class="bar-label">Д</div>
+              <div class="bar-track">
+                <div class="bar-fill" id="barFillA" style="height: 0%"></div>
+              </div>
+              <div class="bar-value" id="barValueA">0%</div>
+            </div>
+            <div class="bar-item">
+              <div class="bar-label">Р</div>
+              <div class="bar-track">
+                <div class="bar-fill" id="barFillB" style="height: 0%"></div>
+              </div>
+              <div class="bar-value" id="barValueB">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <h3>Человек Р</h3>
+          <div class="progress-circle" id="progressB">
+            <svg viewBox="0 0 36 36">
+              <path
+                class="circle-bg"
+                d="M18 2.0845
+                            a 15.9155 15.9155 0 0 1 0 31.831
+                            a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                class="circle-fill"
+                id="circleFillB"
+                stroke-dasharray="0, 100"
+                d="M18 2.0845
+                            a 15.9155 15.9155 0 0 1 0 31.831
+                            a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span class="percentage" id="percentB">0%</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Фильтры -->
+      <section class="filters-section">
+        <div class="filter-group">
+          <label>Статус:</label>
+          <button class="filter-btn active" data-filter="all">Все</button>
+          <button class="filter-btn" data-filter="not_done">
+            Не выполнено
+          </button>
+          <button class="filter-btn" data-filter="pending">Ожидает</button>
+          <button class="filter-btn" data-filter="confirmed">
+            Подтверждено
+          </button>
+          <button class="filter-btn" data-filter="rejected">Отклонено</button>
+        </div>
+        <div class="filter-group">
+          <label>Период:</label>
+          <button class="period-btn active" data-period="all">Всё время</button>
+          <button class="period-btn" data-period="day">День</button>
+          <button class="period-btn" data-period="week">Неделя</button>
+          <button class="period-btn" data-period="month">Месяц</button>
+        </div>
+      </section>
+
+      <!-- Основные блоки -->
+      <main class="main-content">
+        <!-- Блок для Человека A -->
+        <section class="person-block" id="blockA">
+          <h2>📋 Условия для Человека Д</h2>
+          <div class="add-form">
+            <input
+              type="text"
+              id="inputA"
+              placeholder="Добавить условие для Д..."
+            />
+            <button class="btn-add" id="btnAddA">+ Добавить</button>
+          </div>
+          <div class="conditions-list" id="listA">
+            <!-- Условия будут здесь -->
+          </div>
+        </section>
+
+        <!-- Блок для Человека B -->
+        <section class="person-block" id="blockB">
+          <h2>📋 Условия для Человека Р</h2>
+          <div class="add-form">
+            <input
+              type="text"
+              id="inputB"
+              placeholder="Добавить условие для Р..."
+            />
+            <button class="btn-add" id="btnAddB">+ Добавить</button>
+          </div>
+          <div class="conditions-list" id="listB">
+            <!-- Условия будут здесь -->
+          </div>
+        </section>
+      </main>
+
+      <!-- Модальное окно для отклонения -->
+      <div class="modal" id="rejectModal">
+        <div class="modal-content">
+          <h3>Отклонить выполнение</h3>
+          <p>Укажите причину отклонения:</p>
+          <textarea
+            id="rejectComment"
+            placeholder="Обязательный комментарий..."
+          ></textarea>
+          <div class="modal-actions">
+            <button class="btn-cancel" id="btnCancelReject">Отмена</button>
+            <button class="btn-reject" id="btnConfirmReject">Отклонить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
