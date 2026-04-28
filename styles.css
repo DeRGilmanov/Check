@@ -642,3 +642,17 @@ body {
     width: 100%;
   }
 }
+/* Красная корзина */
+.btn-delete {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border: 1px solid #fecaca !important;
+  font-size: 1rem !important;
+  padding: 5px 10px !important;
+}
+
+.btn-delete:hover {
+  background: #fecaca !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}

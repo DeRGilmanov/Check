@@ -109,7 +109,8 @@ function renderConditions(target) {
       const canMarkDone = condition.status === "not_done";
       const canReview = condition.status === "pending";
       const creatorName = condition.createdBy;
-      const executorName = condition.target === "A" ? "Человек A" : "Человек B";
+      const executorName =
+        condition.target === "A" ? "Пользователь Д" : "Пользователь Р";
 
       let actionsHTML = "";
       if (canMarkDone) {
@@ -185,7 +186,7 @@ function submitComment(conditionId, target) {
   const input = document.getElementById(`commentInput_${conditionId}`);
   const text = input.value.trim();
   if (!text) return;
-  const author = target === "A" ? "Человек A" : "Человек B";
+  const author = target === "A" ? "Пользователь Д" : "Пользователь Р";
   addComment(conditionId, author, text);
   input.value = "";
 }
@@ -225,7 +226,7 @@ function addCondition(target) {
     status: "not_done",
     comment: "",
     comments: [],
-    createdBy: target === "A" ? "Человек B" : "Человек A",
+    createdBy: target === "A" ? "Пользователь Р" : "Пользователь Д",
     createdAt: Date.now(),
   });
   input.value = "";
