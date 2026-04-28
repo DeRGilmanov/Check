@@ -47,10 +47,51 @@ function getFilteredConditions(target) {
 
 function calculateProgress(target) {
   const all = conditions.filter((c) => c.target === target);
-  const filtered = filterByPeriod(all, currentPeriod);
-  if (filtered.length === 0) return 0;
-  const conf = filtered.filter((c) => c.status === "confirmed").length;
-  return Math.round((conf / filtered.length) * 100);
+  // Прогресс считаем только за сегодня
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayConditions = all.filter(
+    (c) => c.date === today.toISOString().split("T")[0],
+  );
+  if (todayConditions.length === 0) return 0;
+  const conf = todayConditions.filter((c) => c.status === "confirmed").length;
+  return Math.round((conf / todayConditions.length) * 100);
+}
+
+// ===== Ежедневный сброс условий =====
+function getTodayDate() {
+  const today = new Date();
+  return today.toISOString().split("T")[0]; // Формат: "2026-04-28"
+}
+
+function resetDailyConditions() {
+  const today = getTodayDate();
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+
+  // Находим условия, которые нужно сбросить (завершённые и созданные до сегодня)
+  conditions.forEach((condition) => {
+    // Если условие создано до сегодня и оно подтверждено или отклонено
+    if (
+      condition.date &&
+      condition.date < today &&
+      (condition.status === "confirmed" || condition.status === "rejected")
+    ) {
+      // Создаём новое условие на сегодня
+      const newCondition = {
+        id: generateId(),
+        target: condition.target,
+        description: condition.description,
+        status: "not_done",
+        comment: "",
+        comments: [],
+        createdBy: condition.createdBy,
+        createdAt: Date.now(),
+        date: today,
+        isRecurring: condition.isRecurring,
+      };
+      saveCondition(newCondition);
+    }
+  });
 }
 
 // ===== Firebase =====
@@ -58,6 +99,10 @@ function loadData() {
   database.ref("conditions").on("value", (snapshot) => {
     const data = snapshot.val();
     conditions = data ? Object.values(data) : [];
+
+    // Проверяем, нужно ли создать условия на сегодня
+    resetDailyConditions();
+
     renderAll();
   });
 }
@@ -91,14 +136,27 @@ function addComment(conditionId, author, text) {
 // ===== Рендеринг =====
 function renderConditions(target) {
   const container = document.getElementById(`list${target}`);
-  const filtered = getFilteredConditions(target);
+  const today = getTodayDate();
+
+  // Показываем только условия на сегодня
+  let filtered = getFilteredConditions(target);
+  filtered = filtered.filter((c) => c.date === today);
+
+  // Также показываем несброшенные старые условия
+  const oldConditions = conditions.filter(
+    (c) =>
+      c.target === target &&
+      c.date !== today &&
+      (c.status === "not_done" || c.status === "pending"),
+  );
+  filtered = [...filtered, ...oldConditions];
 
   if (filtered.length === 0) {
     container.innerHTML = `
             <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
                 <div style="font-size: 3rem; margin-bottom: 10px;">📭</div>
-                <p style="font-size: 1rem; font-weight: 500;">Нет условий</p>
-                <p style="font-size: 0.8rem;">Добавьте первое условие выше</p>
+                <p style="font-size: 1rem; font-weight: 500;">Нет условий на сегодня</p>
+                <p style="font-size: 0.8rem;">Добавьте новое условие выше</p>
             </div>
         `;
     return;
@@ -153,16 +211,20 @@ function renderConditions(target) {
             </div>
         `;
 
+      const recurringBadge = condition.isRecurring ? " 🔄" : "";
+      const dateBadge =
+        condition.date === today ? "🔄 Сегодня" : "📅 " + condition.date;
+
       return `
             <div class="condition-card">
                 <div class="condition-header">
-                    <span class="condition-text">${condition.description}</span>
+                    <span class="condition-text">${condition.description}${recurringBadge}</span>
                     <span class="status-badge status-${condition.status}">${getStatusText(condition.status)}</span>
                 </div>
                 <div class="condition-meta">
                     <span>📝 ${creatorName}</span>
                     <span>👤 ${executorName}</span>
-                    <span>📅 ${formatDate(condition.createdAt)}</span>
+                    <span>${dateBadge}</span>
                 </div>
                 ${
                   condition.comment
@@ -219,6 +281,8 @@ function addCondition(target) {
   const description = input.value.trim();
   if (!description) return;
 
+  const today = getTodayDate();
+
   saveCondition({
     id: generateId(),
     target: target,
@@ -228,6 +292,8 @@ function addCondition(target) {
     comments: [],
     createdBy: target === "A" ? "Пользователь Р" : "Пользователь Д",
     createdAt: Date.now(),
+    date: today,
+    isRecurring: true, // Все новые условия теперь повторяются
   });
   input.value = "";
 }
@@ -263,7 +329,7 @@ function closeRejectModal() {
 }
 
 function deleteCondition(id) {
-  if (confirm("Удалить условие?")) deleteConditionFromDB(id);
+  if (confirm("Удалить условие навсегда?")) deleteConditionFromDB(id);
 }
 
 // ===== Фильтры =====
