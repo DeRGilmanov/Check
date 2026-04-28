@@ -656,3 +656,13 @@ body {
   color: #991b1b !important;
   border-color: #fca5a5 !important;
 }
+.btn-undo {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.btn-undo:hover {
+  background: #fde68a;
+  color: #78350f;
+}
