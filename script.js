@@ -27,55 +27,37 @@ function getStatusText(status) {
   return statusMap[status] || status;
 }
 
-function filterByPeriod(conditions, period) {
+function filterByPeriod(arr, period) {
   const now = Date.now();
-  switch (period) {
-    case "day":
-      return conditions.filter((c) => c.createdAt > now - 24 * 60 * 60 * 1000);
-    case "week":
-      return conditions.filter(
-        (c) => c.createdAt > now - 7 * 24 * 60 * 60 * 1000,
-      );
-    case "month":
-      return conditions.filter(
-        (c) => c.createdAt > now - 30 * 24 * 60 * 60 * 1000,
-      );
-    default:
-      return conditions;
-  }
-}
-
-function filterByStatus(conditions, status) {
-  if (status === "all") return conditions;
-  return conditions.filter((c) => c.status === status);
+  if (period === "day") return arr.filter((c) => c.createdAt > now - 86400000);
+  if (period === "week")
+    return arr.filter((c) => c.createdAt > now - 604800000);
+  if (period === "month")
+    return arr.filter((c) => c.createdAt > now - 2592000000);
+  return arr;
 }
 
 function getFilteredConditions(target) {
   let filtered = conditions.filter((c) => c.target === target);
   filtered = filterByPeriod(filtered, currentPeriod);
-  filtered = filterByStatus(filtered, currentFilter);
+  if (currentFilter !== "all")
+    filtered = filtered.filter((c) => c.status === currentFilter);
   return filtered;
 }
 
 function calculateProgress(target) {
-  const allConditions = conditions.filter((c) => c.target === target);
-  const periodFiltered = filterByPeriod(allConditions, currentPeriod);
-  if (periodFiltered.length === 0) return 0;
-  const confirmed = periodFiltered.filter(
-    (c) => c.status === "confirmed",
-  ).length;
-  return Math.round((confirmed / periodFiltered.length) * 100);
+  const all = conditions.filter((c) => c.target === target);
+  const filtered = filterByPeriod(all, currentPeriod);
+  if (filtered.length === 0) return 0;
+  const conf = filtered.filter((c) => c.status === "confirmed").length;
+  return Math.round((conf / filtered.length) * 100);
 }
 
+// ===== Firebase =====
 function loadData() {
-  const conditionsRef = database.ref("conditions");
-  conditionsRef.on("value", (snapshot) => {
+  database.ref("conditions").on("value", (snapshot) => {
     const data = snapshot.val();
-    if (data) {
-      conditions = Object.values(data);
-    } else {
-      conditions = [];
-    }
+    conditions = data ? Object.values(data) : [];
     renderAll();
   });
 }
@@ -95,9 +77,7 @@ function deleteConditionFromDB(id) {
 function addComment(conditionId, author, text) {
   const condition = conditions.find((c) => c.id === conditionId);
   if (condition) {
-    if (!condition.comments) {
-      condition.comments = [];
-    }
+    if (!condition.comments) condition.comments = [];
     condition.comments.push({
       id: generateId(),
       author: author,
@@ -108,15 +88,17 @@ function addComment(conditionId, author, text) {
   }
 }
 
+// ===== Рендеринг =====
 function renderConditions(target) {
   const container = document.getElementById(`list${target}`);
   const filtered = getFilteredConditions(target);
 
   if (filtered.length === 0) {
     container.innerHTML = `
-            <div style="text-align: center; padding: 30px; color: #94a3b8;">
-                <p style="font-size: 1.1rem;">📭 Нет условий</p>
-                <p style="font-size: 0.85rem;">Добавьте первое условие выше</p>
+            <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                <div style="font-size: 3rem; margin-bottom: 10px;">📭</div>
+                <p style="font-size: 1rem; font-weight: 500;">Нет условий</p>
+                <p style="font-size: 0.8rem;">Добавьте первое условие выше</p>
             </div>
         `;
     return;
@@ -131,7 +113,7 @@ function renderConditions(target) {
 
       let actionsHTML = "";
       if (canMarkDone) {
-        actionsHTML += `<button class="btn-sm btn-done" onclick="markAsDone('${condition.id}')">✔ Отметить выполненным</button>`;
+        actionsHTML += `<button class="btn-sm btn-done" onclick="markAsDone('${condition.id}')">✔ Выполнено</button>`;
       }
       if (canReview) {
         actionsHTML += `
@@ -139,13 +121,13 @@ function renderConditions(target) {
                 <button class="btn-sm btn-reject" onclick="openRejectModal('${condition.id}')">✗ Отклонить</button>
             `;
       }
-      actionsHTML += `<button class="btn-sm btn-delete" onclick="deleteCondition('${condition.id}')">🗑 Удалить</button>`;
+      actionsHTML += `<button class="btn-sm btn-delete" onclick="deleteCondition('${condition.id}')">🗑</button>`;
 
       let commentsHTML = "";
       if (condition.comments && condition.comments.length > 0) {
         commentsHTML = `
                 <div class="comments-section">
-                    <div class="comments-title">💬 Переписка:</div>
+                    <div class="comments-title">💬 Переписка (${condition.comments.length})</div>
                     ${condition.comments
                       .map(
                         (comment) => `
@@ -165,8 +147,8 @@ function renderConditions(target) {
 
       const commentFormHTML = `
             <div class="comment-form">
-                <input type="text" class="comment-input" id="commentInput_${condition.id}" placeholder="Добавить комментарий...">
-                <button class="btn-sm btn-comment" onclick="submitComment('${condition.id}', '${target}')">💬 Отправить</button>
+                <input type="text" class="comment-input" id="commentInput_${condition.id}" placeholder="Комментарий...">
+                <button class="btn-sm btn-comment" onclick="submitComment('${condition.id}', '${target}')">Отправить</button>
             </div>
         `;
 
@@ -177,26 +159,22 @@ function renderConditions(target) {
                     <span class="status-badge status-${condition.status}">${getStatusText(condition.status)}</span>
                 </div>
                 <div class="condition-meta">
-                    <span>📝 Создал: ${creatorName}</span>
-                    <span>👤 Выполняет: ${executorName}</span>
-                </div>
-                <div class="condition-meta">
-                    <span>📅 Создано: ${formatDate(condition.createdAt)}</span>
+                    <span>📝 ${creatorName}</span>
+                    <span>👤 ${executorName}</span>
+                    <span>📅 ${formatDate(condition.createdAt)}</span>
                 </div>
                 ${
                   condition.comment
                     ? `
                     <div class="condition-comment rejection-reason">
-                        <strong>⚠️ Причина отклонения:</strong> ${condition.comment}
+                        <strong>⚠️ Отклонено:</strong> ${condition.comment}
                     </div>
                 `
                     : ""
                 }
                 ${commentsHTML}
                 ${commentFormHTML}
-                <div class="condition-actions">
-                    ${actionsHTML}
-                </div>
+                <div class="condition-actions">${actionsHTML}</div>
             </div>
         `;
     })
@@ -234,15 +212,13 @@ function renderAll() {
   renderStats();
 }
 
+// ===== Действия =====
 function addCondition(target) {
   const input = document.getElementById(`input${target}`);
   const description = input.value.trim();
-  if (!description) {
-    alert("Введите описание условия");
-    return;
-  }
+  if (!description) return;
 
-  const newCondition = {
+  saveCondition({
     id: generateId(),
     target: target,
     description: description,
@@ -251,9 +227,7 @@ function addCondition(target) {
     comments: [],
     createdBy: target === "A" ? "Человек B" : "Человек A",
     createdAt: Date.now(),
-  };
-
-  saveCondition(newCondition);
+  });
   input.value = "";
 }
 
@@ -275,13 +249,10 @@ function openRejectModal(id) {
 function rejectCondition() {
   const comment = document.getElementById("rejectComment").value.trim();
   if (!comment) {
-    alert("Необходимо указать причину отклонения");
+    alert("Укажите причину отклонения!");
     return;
   }
-  updateCondition(pendingRejectId, {
-    status: "rejected",
-    comment: comment,
-  });
+  updateCondition(pendingRejectId, { status: "rejected", comment: comment });
   closeRejectModal();
 }
 
@@ -291,64 +262,54 @@ function closeRejectModal() {
 }
 
 function deleteCondition(id) {
-  if (confirm("Вы уверены, что хотите удалить это условие?")) {
-    deleteConditionFromDB(id);
-  }
+  if (confirm("Удалить условие?")) deleteConditionFromDB(id);
 }
 
+// ===== Фильтры =====
 function setFilter(filter) {
   currentFilter = filter;
-  document.querySelectorAll(".filter-btn").forEach((btn) => {
-    btn.classList.remove("active");
-    if (btn.dataset.filter === filter) btn.classList.add("active");
-  });
+  document
+    .querySelectorAll(".filter-btn")
+    .forEach((b) => b.classList.remove("active"));
+  document.querySelector(`[data-filter="${filter}"]`).classList.add("active");
   renderAll();
 }
 
 function setPeriod(period) {
   currentPeriod = period;
-  document.querySelectorAll(".period-btn").forEach((btn) => {
-    btn.classList.remove("active");
-    if (btn.dataset.period === period) btn.classList.add("active");
-  });
+  document
+    .querySelectorAll(".period-btn")
+    .forEach((b) => b.classList.remove("active"));
+  document.querySelector(`[data-period="${period}"]`).classList.add("active");
   renderAll();
 }
 
+// ===== Инициализация =====
 function init() {
   loadData();
 
-  document
-    .getElementById("btnAddA")
-    .addEventListener("click", () => addCondition("A"));
-  document
-    .getElementById("btnAddB")
-    .addEventListener("click", () => addCondition("B"));
+  document.getElementById("btnAddA").onclick = () => addCondition("A");
+  document.getElementById("btnAddB").onclick = () => addCondition("B");
 
-  document.getElementById("inputA").addEventListener("keypress", (e) => {
+  document.getElementById("inputA").onkeypress = (e) => {
     if (e.key === "Enter") addCondition("A");
-  });
-  document.getElementById("inputB").addEventListener("keypress", (e) => {
+  };
+  document.getElementById("inputB").onkeypress = (e) => {
     if (e.key === "Enter") addCondition("B");
-  });
-
-  document.querySelectorAll(".filter-btn").forEach((btn) => {
-    btn.addEventListener("click", () => setFilter(btn.dataset.filter));
-  });
-
-  document.querySelectorAll(".period-btn").forEach((btn) => {
-    btn.addEventListener("click", () => setPeriod(btn.dataset.period));
-  });
+  };
 
   document
-    .getElementById("btnConfirmReject")
-    .addEventListener("click", rejectCondition);
+    .querySelectorAll(".filter-btn")
+    .forEach((b) => (b.onclick = () => setFilter(b.dataset.filter)));
   document
-    .getElementById("btnCancelReject")
-    .addEventListener("click", closeRejectModal);
+    .querySelectorAll(".period-btn")
+    .forEach((b) => (b.onclick = () => setPeriod(b.dataset.period)));
 
-  document.getElementById("rejectModal").addEventListener("click", (e) => {
+  document.getElementById("btnConfirmReject").onclick = rejectCondition;
+  document.getElementById("btnCancelReject").onclick = closeRejectModal;
+  document.getElementById("rejectModal").onclick = (e) => {
     if (e.target === e.currentTarget) closeRejectModal();
-  });
+  };
 }
 
 init();
