@@ -1,4 +1,3 @@
-// Firebase конфигурация
 const firebaseConfig = {
   apiKey: "AIzaSyD4FS4d3_Dd2Bb1Rgn2EtMe1pDdr5Uy3vQ",
   authDomain: "check-7ef70.firebaseapp.com",
@@ -9,11 +8,9 @@ const firebaseConfig = {
   appId: "1:871236501125:web:195605338d3950ce01f3ec",
 };
 
-// Инициализация Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
-// Проверка подключения
 database.ref(".info/connected").on("value", (snap) => {
   const statusElement = document.getElementById("connectionStatus");
   if (snap.val() === true) {
