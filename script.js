@@ -1,15 +1,15 @@
 let conditions = [];
 let currentFilter = "all";
-let currentPeriod = "all";
+let currentPeriod = "day"; // По умолчанию показываем только сегодня
 let pendingRejectId = null;
 
 // ===== Шаблоны условий по умолчанию =====
-const defaultConditionsForB = [
+const defaultConditionsForA = [
   "Знать где ты, с кем ты, что будешь делать",
   "Важно чтобы смотрела на будущее (как жить дальше)",
   "Мне не нравится, когда ты одеваешься открыто не в моём присутствии + откровенные видео для Инсты (соски, трусики, попа, открытая одежда где всё видно)",
   "Советоваться со мной и хотя бы иногда слушать",
-  "Для меня важен секс 2-3 раз в неделю, но он мне не важен если он только по моей прихоти",
+  "Для меня важен секс 5 раз в неделю, но он мне не важен если он только по моей прихоти",
   "Писать, звонить мне по возможности",
   "Само-собой искренность, забота, взаимоуважение (считаться с моим мнением тоже)",
   "Личное пространство",
@@ -17,10 +17,12 @@ const defaultConditionsForB = [
   "Стараться уважать моё время",
   "Брать иногда ответственность на себя (ссоры, организация мероприятий, оплата чего-нибудь). Чтобы я мог расслабиться время от времени",
   "Не флиртовать с мальчиками, глазки не строить",
+  "Не показывать что у тебя всё плохо (как с Радмиром). Не восхищаться",
   "Стараться не обсуждать меня с кем-то (ты меня простишь, а в глазах других так и останусь плохим)",
+  "Иметь общие планы: дом, квартира, машина, отдых",
 ];
 
-const defaultConditionsForA = [
+const defaultConditionsForB = [
   "Частые комплименты",
   "Разделять мои интересы (обсуждать мои хобби, говорить об этом, интересоваться деталями, быть в курсе всего)",
   "Поддерживать мои интересы, мои начинания (давать советы, если они необходимы и корректны, предлагать помощь, утешать, если что-то не получается, пытаться решить если возникает проблема)",
@@ -61,11 +63,19 @@ function getStatusText(status) {
 
 function filterByPeriod(arr, period) {
   const now = Date.now();
-  if (period === "day") return arr.filter((c) => c.createdAt > now - 86400000);
-  if (period === "week")
+  const today = getTodayDate();
+
+  if (period === "day") {
+    // Показываем только сегодня
+    return arr.filter((c) => c.date === today);
+  }
+  if (period === "week") {
     return arr.filter((c) => c.createdAt > now - 604800000);
-  if (period === "month")
+  }
+  if (period === "month") {
     return arr.filter((c) => c.createdAt > now - 2592000000);
+  }
+  // "all" - показываем всё
   return arr;
 }
 
@@ -99,55 +109,60 @@ function getTodayDate() {
 // ===== Создание условий по умолчанию =====
 function createDefaultConditions() {
   const today = getTodayDate();
-  const todayConditions = conditions.filter((c) => c.date === today);
 
-  // Создаём для A (если ещё не созданы)
-  const existingA = todayConditions.filter(
-    (c) => c.target === "A" && c.isDefault === true,
-  );
-  if (existingA.length === 0) {
-    defaultConditionsForA.forEach((desc) => {
-      const newCondition = {
-        id: generateId(),
-        target: "A",
-        description: desc,
-        status: "not_done",
-        comment: "",
-        comments: [],
-        createdBy: "Система",
-        createdAt: Date.now(),
-        date: today,
-        isRecurring: true,
-        isDefault: true,
-      };
-      conditions.push(newCondition);
-      saveCondition(newCondition);
-    });
-  }
+  database.ref("conditions").once("value", (snapshot) => {
+    const allData = snapshot.val();
+    const allConditions = allData ? Object.values(allData) : [];
+    const todayConditions = allConditions.filter((c) => c.date === today);
 
-  // Создаём для B (если ещё не созданы)
-  const existingB = todayConditions.filter(
-    (c) => c.target === "B" && c.isDefault === true,
-  );
-  if (existingB.length === 0) {
-    defaultConditionsForB.forEach((desc) => {
-      const newCondition = {
-        id: generateId(),
-        target: "B",
-        description: desc,
-        status: "not_done",
-        comment: "",
-        comments: [],
-        createdBy: "Система",
-        createdAt: Date.now(),
-        date: today,
-        isRecurring: true,
-        isDefault: true,
-      };
-      conditions.push(newCondition);
-      saveCondition(newCondition);
-    });
-  }
+    // Проверяем условия для A
+    const existingADefaults = todayConditions.filter(
+      (c) => c.target === "A" && c.isDefault === true,
+    );
+
+    if (existingADefaults.length === 0) {
+      defaultConditionsForA.forEach((desc) => {
+        const newCondition = {
+          id: generateId(),
+          target: "A",
+          description: desc,
+          status: "not_done",
+          comment: "",
+          comments: [],
+          createdBy: "Система",
+          createdAt: Date.now(),
+          date: today,
+          isRecurring: true,
+          isDefault: true,
+        };
+        database.ref("conditions/" + newCondition.id).set(newCondition);
+      });
+    }
+
+    // Проверяем условия для B
+    const existingBDefaults = todayConditions.filter(
+      (c) => c.target === "B" && c.isDefault === true,
+    );
+
+    if (existingBDefaults.length === 0) {
+      defaultConditionsForB.forEach((desc) => {
+        const newCondition = {
+          id: generateId(),
+          target: "B",
+          description: desc,
+          status: "not_done",
+          comment: "",
+          comments: [],
+          createdBy: "Система",
+          createdAt: Date.now(),
+          date: today,
+          isRecurring: true,
+          isDefault: true,
+        };
+        database.ref("conditions/" + newCondition.id).set(newCondition);
+      });
+    }
+  });
 }
 
 // ===== Firebase =====
@@ -191,12 +206,9 @@ function renderConditions(target) {
   const container = document.getElementById(`list${target}`);
   const today = getTodayDate();
 
-  let filtered = conditions.filter((c) => c.target === target);
-  filtered = filterByPeriod(filtered, currentPeriod);
-  if (currentFilter !== "all") {
-    filtered = filtered.filter((c) => c.status === currentFilter);
-  }
+  let filtered = getFilteredConditions(target);
 
+  // Сортируем: сегодняшние сверху, затем по дате создания
   filtered.sort((a, b) => {
     if (a.date === today && b.date !== today) return -1;
     if (a.date !== today && b.date === today) return 1;
@@ -206,13 +218,21 @@ function renderConditions(target) {
   });
 
   if (filtered.length === 0) {
+    const periodText =
+      currentPeriod === "day"
+        ? "на сегодня"
+        : currentPeriod === "week"
+          ? "за неделю"
+          : currentPeriod === "month"
+            ? "за месяц"
+            : "";
     container.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
-                <div style="font-size: 3rem; margin-bottom: 10px;">📭</div>
-                <p style="font-size: 1rem; font-weight: 500;">Нет условий</p>
-                <p style="font-size: 0.8rem;">Добавьте новое условие выше</p>
-            </div>
-        `;
+      <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+        <div style="font-size: 3rem; margin-bottom: 10px;">📭</div>
+        <p style="font-size: 1rem; font-weight: 500;">Нет условий ${periodText}</p>
+        <p style="font-size: 0.8rem;">Добавьте новое условие выше</p>
+      </div>
+    `;
     return;
   }
 
@@ -228,93 +248,88 @@ function renderConditions(target) {
 
       let actionsHTML = "";
 
-      // Кнопка "Выполнено"
       if (canMarkDone) {
         actionsHTML += `<button class="btn-sm btn-done" onclick="markAsDone('${condition.id}')">✔ Выполнено</button>`;
       }
 
-      // Кнопки подтверждения/отклонения
       if (canReview) {
         actionsHTML += `
-                    <button class="btn-sm btn-confirm" onclick="confirmCondition('${condition.id}')">✓ Подтвердить</button>
-                    <button class="btn-sm btn-reject" onclick="openRejectModal('${condition.id}')">✗ Отклонить</button>
-                `;
+          <button class="btn-sm btn-confirm" onclick="confirmCondition('${condition.id}')">✓ Подтвердить</button>
+          <button class="btn-sm btn-reject" onclick="openRejectModal('${condition.id}')">✗ Отклонить</button>
+        `;
       }
 
-      // Кнопка "Отменить подтверждение"
       if (canUndo) {
         actionsHTML += `<button class="btn-sm btn-undo" onclick="undoConfirm('${condition.id}')">↩ Отменить</button>`;
       }
 
-      // Кнопка удаления (теперь доступна для всех условий)
       actionsHTML += `<button class="btn-sm btn-delete" onclick="deleteCondition('${condition.id}')">🗑</button>`;
 
       let commentsHTML = "";
       if (condition.comments && condition.comments.length > 0) {
         commentsHTML = `
-                    <div class="comments-section">
-                        <div class="comments-title">💬 Переписка (${condition.comments.length})</div>
-                        ${condition.comments
-                          .map(
-                            (comment) => `
-                                <div class="comment-item">
-                                    <div class="comment-header">
-                                        <span class="comment-author">${comment.author}</span>
-                                        <span class="comment-time">${formatDate(comment.timestamp)}</span>
-                                    </div>
-                                    <div class="comment-text">${comment.text}</div>
-                                </div>
-                            `,
-                          )
-                          .join("")}
-                    </div>
-                `;
+          <div class="comments-section">
+            <div class="comments-title">💬 Переписка (${condition.comments.length})</div>
+            ${condition.comments
+              .map(
+                (comment) => `
+                <div class="comment-item">
+                  <div class="comment-header">
+                    <span class="comment-author">${comment.author}</span>
+                    <span class="comment-time">${formatDate(comment.timestamp)}</span>
+                  </div>
+                  <div class="comment-text">${comment.text}</div>
+                </div>
+              `,
+              )
+              .join("")}
+          </div>
+        `;
       }
 
       const commentFormHTML = `
-                <div class="comment-form">
-                    <input type="text" class="comment-input" id="commentInput_${condition.id}" placeholder="Комментарий...">
-                    <button class="btn-sm btn-comment" onclick="submitComment('${condition.id}', '${target}')">Отправить</button>
-                </div>
-            `;
+        <div class="comment-form">
+          <input type="text" class="comment-input" id="commentInput_${condition.id}" placeholder="Комментарий...">
+          <button class="btn-sm btn-comment" onclick="submitComment('${condition.id}', '${target}')">Отправить</button>
+        </div>
+      `;
 
       const defaultBadge = condition.isDefault ? " 📌" : "";
-      const recurringBadge = condition.isRecurring ? " 🔄" : "";
       const dateLabel = isToday
-        ? "🔄 Сегодня"
+        ? "Сегодня"
         : condition.date
-          ? "📅 " + condition.date
-          : "📅 Без даты";
-      const cardStyle = isToday ? "" : "opacity: 0.7;";
+          ? condition.date
+          : "Без даты";
+      const cardStyle = isToday ? "" : "opacity: 0.6;";
       const borderStyle = condition.isDefault
         ? "border-left: 3px solid #818cf8;"
         : "";
 
       return `
-                <div class="condition-card" style="${cardStyle} ${borderStyle}">
-                    <div class="condition-header">
-                        <span class="condition-text">${condition.description}${defaultBadge}${recurringBadge}</span>
-                        <span class="status-badge status-${condition.status}">${getStatusText(condition.status)}</span>
-                    </div>
-                    <div class="condition-meta">
-                        <span>📝 ${creatorName}</span>
-                        <span>👤 ${executorName}</span>
-                        <span>${dateLabel}</span>
-                    </div>
-                    ${
-                      condition.comment
-                        ? `
-                        <div class="condition-comment rejection-reason">
-                            <strong>⚠️ Отклонено:</strong> ${condition.comment}
-                        </div>
-                    `
-                        : ""
-                    }
-                    ${commentsHTML}
-                    ${commentFormHTML}
-                    <div class="condition-actions">${actionsHTML}</div>
-                </div>
-            `;
+        <div class="condition-card" style="${cardStyle} ${borderStyle}">
+          <div class="condition-header">
+            <span class="condition-text">${condition.description}${defaultBadge}</span>
+            <span class="status-badge status-${condition.status}">${getStatusText(condition.status)}</span>
+          </div>
+          <div class="condition-meta">
+            <span>📝 ${creatorName}</span>
+            <span>👤 ${executorName}</span>
+            <span>📅 ${dateLabel}</span>
+          </div>
+          ${
+            condition.comment
+              ? `
+            <div class="condition-comment rejection-reason">
+              <strong>⚠️ Отклонено:</strong> ${condition.comment}
+            </div>
+          `
+              : ""
+          }
+          ${commentsHTML}
+          ${commentFormHTML}
+          <div class="condition-actions">${actionsHTML}</div>
+        </div>
+      `;
     })
     .join("");
 }
@@ -452,6 +467,14 @@ function setPeriod(period) {
 
 // ===== Инициализация =====
 function init() {
+  // Устанавливаем период "День" по умолчанию
+  currentPeriod = "day";
+  document
+    .querySelectorAll(".period-btn")
+    .forEach((b) => b.classList.remove("active"));
+  const dayBtn = document.querySelector(`[data-period="day"]`);
+  if (dayBtn) dayBtn.classList.add("active");
+
   loadData();
 
   document.getElementById("btnAddA").onclick = () => addCondition("A");
